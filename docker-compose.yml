@@ -34,12 +34,17 @@ services:
 
   worker:
     image: mcr.microsoft.com/playwright/python:v1.42.0-jammy
-    command: tail -f /dev/null
+    working_dir: /app
+    command: bash -c "pip install -r requirements.txt && arq app.worker.WorkerSettings"
+    volumes:
+      - ./backend:/app
     networks:
       - worker_net
       - internal_net
     depends_on:
       - redis
+    env_file:
+      - .env
 
 networks:
   public_net:

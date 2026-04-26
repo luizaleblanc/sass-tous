@@ -17,3 +17,14 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class JobResponse(BaseModel):
+    id: str
+    title: str
+    company: str | None
+    url: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

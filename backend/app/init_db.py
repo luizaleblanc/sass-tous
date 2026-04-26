@@ -2,7 +2,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 from .database import DATABASE_URL, Base
-from .models import User, CredentialVault
+from .models import User, Job
 
 async def init_models():
     engine = create_async_engine(DATABASE_URL, poolclass=NullPool)

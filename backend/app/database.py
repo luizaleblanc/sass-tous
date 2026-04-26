@@ -1,15 +1,21 @@
 ﻿import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import declarative_base
 
-DATABASE_URL = f"mysql+aiomysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+aiomysql://user:password@db:3306/automacao")
 
-engine = create_async_engine(DATABASE_URL, echo=False)
-AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+engine = create_async_engine(DATABASE_URL, echo=True)
 
-class Base(DeclarativeBase):
-    pass
+SessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+Base = declarative_base()
 
 async def get_db():
-    async with AsyncSessionLocal() as session:
+    async with SessionLocal() as session:
         yield session
