@@ -22,8 +22,11 @@ class Job(Base):
     company = Column(String(255), nullable=True)
     url = Column(Text, nullable=False)
     status = Column(String(50), default="Encontrada")
+    platform = Column(String(50), nullable=True)
+    application_type = Column(String(50), default="platform")
+    application_email = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     
     owner = relationship("User", back_populates="jobs")
