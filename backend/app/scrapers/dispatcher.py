@@ -1,7 +1,7 @@
 import logging
 from playwright.async_api import Page
 from .base import ScrapedJob
-from . import remoteok, gupy, indeed, linkedin
+from . import remoteok, gupy, indeed, linkedin, programathor, infojobs, solides, glassdoor
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,14 @@ def detect_platform(url: str) -> str:
         return "indeed"
     if "linkedin.com" in u:
         return "linkedin"
-    if "facebook.com" in u or "fb.com" in u:
-        return "facebook"
+    if "programathor.com" in u:
+        return "programathor"
+    if "infojobs.com" in u:
+        return "infojobs"
+    if "solides.com" in u or "solides.io" in u:
+        return "solides"
+    if "glassdoor.com" in u:
+        return "glassdoor"
     return "generic"
 
 
@@ -33,6 +39,14 @@ async def dispatch(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
         return await indeed.scrape(page, url, limit)
     if platform == "linkedin":
         return await linkedin.scrape(page, url, limit)
+    if platform == "programathor":
+        return await programathor.scrape(page, url, limit)
+    if platform == "infojobs":
+        return await infojobs.scrape(page, url, limit)
+    if platform == "solides":
+        return await solides.scrape(page, url, limit)
+    if platform == "glassdoor":
+        return await glassdoor.scrape(page, url, limit)
 
     logger.warning(f"[dispatcher] Sem scraper para '{platform}', ignorando {url}")
     return []

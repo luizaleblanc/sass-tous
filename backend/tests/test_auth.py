@@ -50,6 +50,16 @@ async def test_update_profile(client, auth_headers):
     assert "python" in data["stacks"]
 
 
+async def test_update_profile_work_modality(client, auth_headers):
+    resp = await client.put(
+        "/auth/profile",
+        json={"work_modality": "remoto"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["work_modality"] == "remoto"
+
+
 async def test_update_profile_invalid_seniority(client, auth_headers):
     resp = await client.put(
         "/auth/profile",
@@ -59,6 +69,50 @@ async def test_update_profile_invalid_seniority(client, auth_headers):
     assert resp.status_code == 400
 
 
+async def test_update_profile_invalid_work_modality(client, auth_headers):
+    resp = await client.put(
+        "/auth/profile",
+        json={"work_modality": "astronauta"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
 async def test_me_unauthenticated(client):
     resp = await client.get("/auth/me")
     assert resp.status_code == 401
+
+
+async def test_upload_cv_txt(client, auth_headers):
+    cv_content = b"Senior Python Developer\nSkills: python, fastapi, docker, react\nlinkedin.com/in/dev\ngithub.com/dev"
+    resp = await client.post(
+        "/auth/cv",
+        files={"file": ("curriculo.txt", cv_content, "text/plain")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["cv_filename"] == "curriculo.txt"
+    assert data["cv_parsed"]["linkedin"] is not None
+    assert "python" in data["stacks"]
+
+
+async def test_upload_cv_invalid_format(client, auth_headers):
+    resp = await client.post(
+        "/auth/cv",
+        files={"file": ("foto.jpg", b"fake image", "image/jpeg")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_upload_cv_auto_populates_stacks(client, auth_headers):
+    cv_content = b"UX Designer\nFeramentas: figma, sketch, prototyping\ncontato@email.com"
+    resp = await client.post(
+        "/auth/cv",
+        files={"file": ("cv.txt", cv_content, "text/plain")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "figma" in data["stacks"]

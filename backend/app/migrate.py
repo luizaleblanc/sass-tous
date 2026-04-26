@@ -5,8 +5,14 @@ from .database import engine
 MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN seniority VARCHAR(20) NULL",
     "ALTER TABLE users ADD COLUMN stacks JSON NULL",
+    "ALTER TABLE users ADD COLUMN work_modality VARCHAR(20) NULL",
+    "ALTER TABLE users ADD COLUMN cv_filename VARCHAR(255) NULL",
+    "ALTER TABLE users ADD COLUMN cv_text TEXT NULL",
+    "ALTER TABLE users ADD COLUMN cv_parsed JSON NULL",
     "ALTER TABLE jobs ADD COLUMN seniority VARCHAR(20) NULL",
     "ALTER TABLE jobs ADD COLUMN stacks JSON NULL",
+    "ALTER TABLE jobs ADD COLUMN location_type VARCHAR(20) NULL DEFAULT 'nacional'",
+    "ALTER TABLE jobs ADD COLUMN work_modality VARCHAR(20) NULL DEFAULT 'presencial'",
 ]
 
 
@@ -15,11 +21,13 @@ async def run():
         for sql in MIGRATIONS:
             try:
                 await conn.execute(text(sql))
-                print(f"OK: {sql}")
+                col = sql.split("ADD COLUMN")[1].strip().split()[0]
+                print(f"OK: {col}")
             except Exception as e:
                 msg = str(e)
                 if "Duplicate column name" in msg or "already exists" in msg:
-                    print(f"SKIP (já existe): {sql.split('ADD COLUMN')[1].strip()}")
+                    col = sql.split("ADD COLUMN")[1].strip().split()[0]
+                    print(f"SKIP (já existe): {col}")
                 else:
                     print(f"ERRO: {e}")
                     raise

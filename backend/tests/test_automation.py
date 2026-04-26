@@ -17,6 +17,8 @@ async def _create_job(db_session, owner_id: str, **kwargs) -> str:
         application_type="platform",
         seniority="Senior",
         stacks=["python", "docker"],
+        location_type="nacional",
+        work_modality="presencial",
         owner_id=owner_id,
         created_at=datetime.utcnow(),
     )
@@ -145,6 +147,30 @@ async def test_delete_job_wrong_owner(client, db_session):
     job_id = await _create_job(db_session, owner_id)
     resp3 = await client.delete(f"/automation/jobs/{job_id}", headers=attacker_headers)
     assert resp3.status_code == 403
+
+
+async def test_filter_by_location_type(client, auth_headers, db_session):
+    uid = await _get_user_id(client, auth_headers)
+    await _create_job(db_session, uid, location_type="internacional", title="International Dev")
+    await _create_job(db_session, uid, location_type="nacional", title="Local Dev")
+
+    resp = await client.get("/automation/jobs?location_type=internacional", headers=auth_headers)
+    assert resp.status_code == 200
+    jobs = resp.json()
+    assert len(jobs) == 1
+    assert jobs[0]["location_type"] == "internacional"
+
+
+async def test_filter_by_work_modality(client, auth_headers, db_session):
+    uid = await _get_user_id(client, auth_headers)
+    await _create_job(db_session, uid, work_modality="remoto", title="Remote Dev")
+    await _create_job(db_session, uid, work_modality="presencial", title="Presencial Dev")
+
+    resp = await client.get("/automation/jobs?work_modality=remoto", headers=auth_headers)
+    assert resp.status_code == 200
+    jobs = resp.json()
+    assert len(jobs) == 1
+    assert jobs[0]["work_modality"] == "remoto"
 
 
 async def test_apply_platform(client, auth_headers, db_session):

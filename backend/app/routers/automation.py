@@ -12,10 +12,13 @@ from ..schemas import JobResponse, EmailApplyRequest, PlatformApplyRequest, Plat
 router = APIRouter(prefix="/automation", tags=["Automation"])
 
 _PLATFORM_URL = {
-    "remoteok": "https://remoteok.com/remote-{slug}-jobs",
-    "gupy":     "https://www.gupy.io/vagas?jobName={encoded}",
-    "indeed":   "https://br.indeed.com/jobs?q={encoded}",
-    "linkedin": "https://www.linkedin.com/jobs/search/?keywords={encoded}",
+    "remoteok":     "https://remoteok.com/remote-{slug}-jobs",
+    "gupy":         "https://www.gupy.io/vagas?jobName={encoded}",
+    "indeed":       "https://br.indeed.com/jobs?q={encoded}",
+    "linkedin":     "https://www.linkedin.com/jobs/search/?keywords={encoded}",
+    "programathor": "https://programathor.com.br/jobs?search={encoded}",
+    "infojobs":     "https://www.infojobs.com.br/empregos?q={encoded}",
+    "solides":      "https://jobs.solides.com.br/?term={encoded}",
 }
 
 
@@ -31,6 +34,9 @@ def _expand_keywords(keywords: list[str], platforms: list[str]) -> list[str]:
         slug = kw.lower().replace(" ", "-")
         encoded = kw.replace(" ", "+")
         for p in platforms:
+            if p == "glassdoor":
+                urls.append(f"https://www.glassdoor.com.br/Emprego/{slug}-vagas-SRCH_KO0,{len(slug)}.htm")
+                continue
             tpl = _PLATFORM_URL.get(p)
             if tpl:
                 urls.append(tpl.format(slug=slug, encoded=encoded))
@@ -72,6 +78,11 @@ async def get_matching_jobs(
         query = query.where(
             (Job.seniority == current_user.seniority) | (Job.seniority == None)  # noqa: E711
         )
+    if current_user.work_modality:
+        query = query.where(
+            (Job.work_modality == current_user.work_modality) | (Job.work_modality == None)  # noqa: E711
+        )
+
     result = await db.execute(query.order_by(Job.created_at.desc()))
     jobs = result.scalars().all()
 
@@ -90,8 +101,10 @@ async def list_jobs(
     platform: Optional[str] = Query(None, description="remoteok | gupy | indeed | linkedin"),
     application_type: Optional[str] = Query(None, description="email | platform"),
     status: Optional[str] = Query(None, description="Encontrada | Aplicada"),
-    seniority: Optional[str] = Query(None, description="Junior | Pleno | Senior"),
+    seniority: Optional[str] = Query(None, description="Estágio | Trainee | Junior | Pleno | Senior"),
     stack: Optional[str] = Query(None, description="Ex: react, python, docker"),
+    location_type: Optional[str] = Query(None, description="nacional | internacional"),
+    work_modality: Optional[str] = Query(None, description="remoto | presencial | hibrido"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -104,6 +117,10 @@ async def list_jobs(
         query = query.where(Job.status == status)
     if seniority:
         query = query.where(Job.seniority == seniority)
+    if location_type:
+        query = query.where(Job.location_type == location_type)
+    if work_modality:
+        query = query.where(Job.work_modality == work_modality)
     query = query.order_by(Job.created_at.desc())
 
     result = await db.execute(query)

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,7 +11,9 @@ from ..schemas import UserCreate, UserResponse, Token, UserProfileUpdate, UserPr
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-_VALID_SENIORITY = {"Junior", "Pleno", "Senior"}
+_VALID_SENIORITY = {"Estágio", "Trainee", "Junior", "Pleno", "Senior"}
+_VALID_WORK_MODALITY = {"remoto", "presencial", "hibrido"}
+_ALLOWED_CV_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
@@ -58,6 +61,42 @@ async def update_profile(
         current_user.seniority = payload.seniority
     if payload.stacks is not None:
         current_user.stacks = payload.stacks
+    if payload.work_modality is not None:
+        if payload.work_modality not in _VALID_WORK_MODALITY:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Modalidade inválida. Valores aceitos: {sorted(_VALID_WORK_MODALITY)}",
+            )
+        current_user.work_modality = payload.work_modality
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+
+@router.post("/cv", response_model=UserProfileResponse)
+async def upload_cv(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _ALLOWED_CV_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Formato não suportado. Aceitos: {sorted(_ALLOWED_CV_EXTENSIONS)}",
+        )
+
+    from ..cv_parser import parse_cv
+    content = await file.read()
+    parsed = parse_cv(content, file.filename)
+
+    current_user.cv_filename = file.filename
+    current_user.cv_text = parsed.pop("raw_text", "")
+    current_user.cv_parsed = parsed
+
+    if not current_user.stacks and parsed.get("stacks"):
+        current_user.stacks = parsed["stacks"]
+
     await db.commit()
     await db.refresh(current_user)
     return current_user

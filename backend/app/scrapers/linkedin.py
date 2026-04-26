@@ -1,6 +1,6 @@
 import logging
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob, detect_seniority, detect_stacks
+from .base import ScrapedJob, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
 
 logger = logging.getLogger(__name__)
 PLATFORM = "linkedin"
@@ -37,6 +37,8 @@ async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
                 application_type="platform",
                 seniority=detect_seniority(title),
                 stacks=detect_stacks(title),
+                location_type=detect_location_type(title, PLATFORM),
+                work_modality=detect_work_modality(title, PLATFORM),
             ))
         except Exception:
             continue

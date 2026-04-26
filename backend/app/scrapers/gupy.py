@@ -1,7 +1,7 @@
 import logging
 import httpx
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob, detect_seniority, detect_stacks
+from .base import ScrapedJob, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
 
 logger = logging.getLogger(__name__)
 PLATFORM = "gupy"
@@ -47,6 +47,8 @@ async def _scrape_api(keyword: str = "", limit: int = 15) -> list[ScrapedJob]:
             application_type="platform",
             seniority=detect_seniority(corpus),
             stacks=detect_stacks(corpus),
+            location_type=detect_location_type(corpus, PLATFORM),
+            work_modality=detect_work_modality(corpus, PLATFORM),
         ))
 
     logger.info(f"[gupy-api] {len(jobs)} vagas extraídas")
@@ -79,6 +81,8 @@ async def _scrape_page(page: Page, url: str, limit: int = 15) -> list[ScrapedJob
                 application_type="platform",
                 seniority=detect_seniority(title),
                 stacks=detect_stacks(title),
+                location_type=detect_location_type(title, PLATFORM),
+                work_modality=detect_work_modality(title, PLATFORM),
             ))
         except Exception:
             continue

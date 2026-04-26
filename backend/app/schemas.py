@@ -19,6 +19,15 @@ class UserResponse(BaseModel):
 class UserProfileUpdate(BaseModel):
     seniority: Optional[str] = None
     stacks: Optional[list[str]] = None
+    work_modality: Optional[str] = None
+
+
+class CVData(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    stacks: list[str] = []
 
 
 class UserProfileResponse(BaseModel):
@@ -28,6 +37,9 @@ class UserProfileResponse(BaseModel):
     email: EmailStr
     seniority: Optional[str]
     stacks: Optional[list[str]]
+    work_modality: Optional[str]
+    cv_filename: Optional[str]
+    cv_parsed: Optional[dict]
     created_at: datetime
 
 
@@ -49,6 +61,8 @@ class JobResponse(BaseModel):
     application_email: Optional[str]
     seniority: Optional[str]
     stacks: Optional[list[str]]
+    location_type: Optional[str]
+    work_modality: Optional[str]
     created_at: datetime
 
 

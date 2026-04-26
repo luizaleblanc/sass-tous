@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
@@ -13,6 +13,10 @@ class User(Base):
     password = Column(String(255), nullable=False)
     seniority = Column(String(20), nullable=True)
     stacks = Column(JSON, nullable=True)
+    work_modality = Column(String(20), nullable=True)
+    cv_filename = Column(String(255), nullable=True)
+    cv_text = Column(Text, nullable=True)
+    cv_parsed = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     jobs = relationship("Job", back_populates="owner", cascade="all, delete-orphan")
@@ -31,6 +35,8 @@ class Job(Base):
     application_email = Column(String(255), nullable=True)
     seniority = Column(String(20), nullable=True)
     stacks = Column(JSON, nullable=True)
+    location_type = Column(String(20), default="nacional")
+    work_modality = Column(String(20), default="presencial")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)

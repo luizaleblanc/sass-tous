@@ -3,30 +3,35 @@ from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
 from .base import ScrapedJob, extract_email, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
 
 logger = logging.getLogger(__name__)
-PLATFORM = "indeed"
+PLATFORM = "programathor"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
-        await page.wait_for_selector(".job_seen_beacon, .tapItem, [data-jk]", timeout=10000)
+        await page.wait_for_selector(".vacancy-cell, .job-item, [class*='vacancy']", timeout=10000)
     except PlaywrightTimeout:
-        logger.warning("[indeed] Sem vagas — Cloudflare pode estar bloqueando")
+        logger.warning(f"[programathor] Nenhuma vaga encontrada em {url}")
         return []
 
-    cards = await page.locator(".job_seen_beacon, .tapItem").all()
+    cards = await page.locator(".vacancy-cell, .job-item, [class*='vacancy']").all()
     jobs = []
 
     for card in cards[:limit]:
         try:
-            title = await card.locator(".jobTitle span, h2.jobTitle").first.inner_text(timeout=2000)
-            company = await card.locator(".companyName, [data-testid='company-name']").first.inner_text(timeout=2000)
-            href = await card.locator("a[data-jk], a.jcs-JobTitle").first.get_attribute("href") or ""
-            job_url = f"https://br.indeed.com{href}" if href.startswith("/") else href
+            title = await card.locator("h2, h3, .vacancy-title, [class*='title']").first.inner_text(timeout=2000)
+            company = ""
+            try:
+                company = await card.locator(".company-name, [class*='company']").first.inner_text(timeout=1000)
+            except Exception:
+                pass
+
+            href = await card.locator("a").first.get_attribute("href") or ""
+            job_url = f"https://programathor.com.br{href}" if href.startswith("/") else href or url
 
             description = ""
             try:
-                description = await card.locator(".job-snippet").inner_text(timeout=500)
+                description = await card.locator("[class*='description'], [class*='tags']").inner_text(timeout=500)
             except Exception:
                 pass
 
@@ -47,5 +52,5 @@ async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
         except Exception:
             continue
 
-    logger.info(f"[indeed] {len(jobs)} vagas extraídas")
+    logger.info(f"[programathor] {len(jobs)} vagas extraídas")
     return jobs
