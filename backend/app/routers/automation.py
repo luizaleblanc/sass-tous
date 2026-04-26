@@ -11,9 +11,30 @@ from ..schemas import JobResponse, EmailApplyRequest, PlatformApplyRequest, Plat
 
 router = APIRouter(prefix="/automation", tags=["Automation"])
 
+_PLATFORM_URL = {
+    "remoteok": "https://remoteok.com/remote-{slug}-jobs",
+    "gupy":     "https://www.gupy.io/vagas?jobName={encoded}",
+    "indeed":   "https://br.indeed.com/jobs?q={encoded}",
+    "linkedin": "https://www.linkedin.com/jobs/search/?keywords={encoded}",
+}
+
 
 class TaskRequest(BaseModel):
-    target_urls: list[str]
+    target_urls: list[str] = []
+    keywords: list[str] = []
+    platforms: list[str] = ["remoteok", "gupy"]
+
+
+def _expand_keywords(keywords: list[str], platforms: list[str]) -> list[str]:
+    urls = []
+    for kw in keywords:
+        slug = kw.lower().replace(" ", "-")
+        encoded = kw.replace(" ", "+")
+        for p in platforms:
+            tpl = _PLATFORM_URL.get(p)
+            if tpl:
+                urls.append(tpl.format(slug=slug, encoded=encoded))
+    return urls
 
 
 @router.post("/start", status_code=status.HTTP_202_ACCEPTED)
@@ -22,14 +43,46 @@ async def start_automation(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
+    urls = list(task.target_urls) + _expand_keywords(task.keywords, task.platforms)
+    if not urls:
+        raise HTTPException(status_code=400, detail="Informe target_urls ou keywords")
     arq_job = await request.app.state.redis_pool.enqueue_job(
-        "perform_scraping", task.target_urls, current_user.id
+        "perform_scraping", urls, current_user.id
     )
     return {
-        "message": f"Scraping enfileirado para {len(task.target_urls)} site(s).",
+        "message": f"Scraping enfileirado para {len(urls)} site(s).",
         "job_id": arq_job.job_id,
         "user_email": current_user.email,
     }
+
+
+@router.get("/jobs/matches", response_model=list[JobResponse])
+async def get_matching_jobs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.seniority and not current_user.stacks:
+        raise HTTPException(
+            status_code=400,
+            detail="Configure seu perfil primeiro: PUT /auth/profile",
+        )
+
+    query = select(Job).where(Job.owner_id == current_user.id)
+    if current_user.seniority:
+        query = query.where(
+            (Job.seniority == current_user.seniority) | (Job.seniority == None)  # noqa: E711
+        )
+    result = await db.execute(query.order_by(Job.created_at.desc()))
+    jobs = result.scalars().all()
+
+    if current_user.stacks:
+        user_stacks = {s.lower() for s in current_user.stacks}
+        jobs = [
+            j for j in jobs
+            if j.stacks and {s.lower() for s in j.stacks} & user_stacks
+        ]
+
+    return jobs
 
 
 @router.get("/jobs", response_model=list[JobResponse])
@@ -37,6 +90,8 @@ async def list_jobs(
     platform: Optional[str] = Query(None, description="remoteok | gupy | indeed | linkedin"),
     application_type: Optional[str] = Query(None, description="email | platform"),
     status: Optional[str] = Query(None, description="Encontrada | Aplicada"),
+    seniority: Optional[str] = Query(None, description="Junior | Pleno | Senior"),
+    stack: Optional[str] = Query(None, description="Ex: react, python, docker"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -47,9 +102,18 @@ async def list_jobs(
         query = query.where(Job.application_type == application_type)
     if status:
         query = query.where(Job.status == status)
+    if seniority:
+        query = query.where(Job.seniority == seniority)
     query = query.order_by(Job.created_at.desc())
+
     result = await db.execute(query)
-    return result.scalars().all()
+    jobs = result.scalars().all()
+
+    if stack:
+        needle = stack.lower()
+        jobs = [j for j in jobs if j.stacks and any(needle in s.lower() for s in j.stacks)]
+
+    return jobs
 
 
 @router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -61,9 +125,9 @@ async def delete_job(
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga nao encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada")
     if job.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
     await db.execute(delete(Job).where(Job.id == job_id))
     await db.commit()
 
@@ -85,8 +149,8 @@ async def apply_via_email(
     valid_jobs = result.scalars().all()
     if not valid_jobs:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Nenhuma vaga com email de aplicacao encontrada nos IDs fornecidos",
+            status_code=400,
+            detail="Nenhuma vaga com email de aplicação encontrada nos IDs fornecidos",
         )
     arq_job = await request.app.state.redis_pool.enqueue_job(
         "perform_email_apply",
@@ -119,7 +183,7 @@ async def apply_via_platform(
     )
     jobs = result.scalars().all()
     if not jobs:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma vaga encontrada")
+        raise HTTPException(status_code=404, detail="Nenhuma vaga encontrada")
 
     for job in jobs:
         job.status = "Aplicada"

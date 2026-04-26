@@ -1,21 +1,19 @@
 import logging
 import httpx
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob
+from .base import ScrapedJob, detect_seniority, detect_stacks
 
 logger = logging.getLogger(__name__)
 PLATFORM = "gupy"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
-    # Gupy portal — usa a API pública
     if "gupy.io/vagas" in url or "portal.api.gupy.io" in url:
         from urllib.parse import urlparse, parse_qs
         qs = parse_qs(urlparse(url).query)
         keyword = qs.get("jobName", qs.get("q", [""]))[0]
         return await _scrape_api(keyword, limit)
 
-    # Página de empresa Gupy (ex: empresa.gupy.io/jobs)
     return await _scrape_page(page, url, limit)
 
 
@@ -25,10 +23,7 @@ async def _scrape_api(keyword: str = "", limit: int = 15) -> list[ScrapedJob]:
             resp = await client.get(
                 "https://portal.api.gupy.io/api/v1/jobs",
                 params={"jobName": keyword, "limit": limit, "offset": 0},
-                headers={
-                    "User-Agent": "Mozilla/5.0",
-                    "Accept": "application/json",
-                },
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -41,12 +36,17 @@ async def _scrape_api(keyword: str = "", limit: int = 15) -> list[ScrapedJob]:
         company = item.get("company") or {}
         company_name = company.get("name", "") if isinstance(company, dict) else str(company)
         job_url = item.get("jobUrl") or f"https://gupy.io/vagas/{item.get('id', '')}"
+        title = item.get("name", "Sem título")
+        description = item.get("description", "")
+        corpus = f"{title} {description}"
         jobs.append(ScrapedJob(
-            title=item.get("name", "Sem título"),
+            title=title,
             company=company_name,
             url=job_url,
             platform=PLATFORM,
             application_type="platform",
+            seniority=detect_seniority(corpus),
+            stacks=detect_stacks(corpus),
         ))
 
     logger.info(f"[gupy-api] {len(jobs)} vagas extraídas")
@@ -77,6 +77,8 @@ async def _scrape_page(page: Page, url: str, limit: int = 15) -> list[ScrapedJob
                 url=job_url,
                 platform=PLATFORM,
                 application_type="platform",
+                seniority=detect_seniority(title),
+                stacks=detect_stacks(title),
             ))
         except Exception:
             continue

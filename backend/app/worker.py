@@ -41,6 +41,8 @@ async def perform_scraping(ctx, target_urls: list[str], user_id: str):
                 platform=j.platform,
                 application_type=j.application_type,
                 application_email=j.application_email,
+                seniority=j.seniority,
+                stacks=j.stacks if j.stacks else None,
                 owner_id=user_id,
             ))
         await db.commit()

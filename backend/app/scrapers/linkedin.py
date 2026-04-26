@@ -1,16 +1,12 @@
 import logging
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob
+from .base import ScrapedJob, detect_seniority, detect_stacks
 
 logger = logging.getLogger(__name__)
 PLATFORM = "linkedin"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
-    """
-    Scraping público do LinkedIn (sem login).
-    Aplica sempre via plataforma — LinkedIn não expõe emails.
-    """
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         await page.wait_for_selector(".job-search-card, .base-card", timeout=12000)
@@ -39,6 +35,8 @@ async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
                 url=href,
                 platform=PLATFORM,
                 application_type="platform",
+                seniority=detect_seniority(title),
+                stacks=detect_stacks(title),
             ))
         except Exception:
             continue

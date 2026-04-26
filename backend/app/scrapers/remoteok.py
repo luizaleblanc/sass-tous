@@ -1,6 +1,6 @@
 import logging
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob, extract_email
+from .base import ScrapedJob, extract_email, detect_seniority, detect_stacks
 
 logger = logging.getLogger(__name__)
 PLATFORM = "remoteok"
@@ -30,6 +30,7 @@ async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
             except Exception:
                 pass
 
+            corpus = f"{title} {description}"
             app_email = extract_email(description)
             jobs.append(ScrapedJob(
                 title=title.strip(),
@@ -38,6 +39,8 @@ async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
                 platform=PLATFORM,
                 application_type="email" if app_email else "platform",
                 application_email=app_email,
+                seniority=detect_seniority(corpus),
+                stacks=detect_stacks(corpus),
             ))
         except PlaywrightTimeout:
             continue

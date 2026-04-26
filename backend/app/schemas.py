@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -9,12 +9,26 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: EmailStr
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+
+class UserProfileUpdate(BaseModel):
+    seniority: Optional[str] = None
+    stacks: Optional[list[str]] = None
+
+
+class UserProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: EmailStr
+    seniority: Optional[str]
+    stacks: Optional[list[str]]
+    created_at: datetime
 
 
 class Token(BaseModel):
@@ -23,6 +37,8 @@ class Token(BaseModel):
 
 
 class JobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     company: Optional[str]
@@ -31,10 +47,9 @@ class JobResponse(BaseModel):
     platform: Optional[str]
     application_type: str
     application_email: Optional[str]
+    seniority: Optional[str]
+    stacks: Optional[list[str]]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class EmailApplyRequest(BaseModel):
