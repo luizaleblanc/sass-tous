@@ -59,7 +59,7 @@ def extract_email(text: str) -> Optional[str]:
 
 
 def detect_seniority(text: str) -> Optional[str]:
-    tokens = set(re.split(r'[\s\-/|,]+', text.lower()))
+    tokens = {t.strip('.,;:()') for t in re.split(r'[\s\-/|,]+', text.lower())}
     if tokens & _SENIOR_TERMS:
         return "Senior"
     if tokens & _PLENO_TERMS:
