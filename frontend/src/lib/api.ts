@@ -18,11 +18,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const auth = {
-  login: (email: string, password: string) =>
-    request<{ access_token: string; token_type: string }>('/auth/login', {
+  login: (email: string, password: string) => {
+    const body = new URLSearchParams()
+    body.set('username', email)
+    body.set('password', password)
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    return fetch(`${BASE}/auth/login`, {
       method: 'POST',
-      body: JSON.stringify({ username: email, password }),
-    }),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body.toString(),
+    }).then(async (r) => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err?.detail ?? `HTTP ${r.status}`)
+      }
+      return r.json() as Promise<{ access_token: string; token_type: string }>
+    })
+  },
 
   register: (email: string, password: string) =>
     request<{ id: number; email: string }>('/auth/register', {
