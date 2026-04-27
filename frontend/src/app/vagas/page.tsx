@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { jobs, type Job, type JobFilters } from '@/lib/api'
-import { ExternalLink, Mail, Globe } from 'lucide-react'
+import { ExternalLink, Mail } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const SENIORITY_OPTIONS = ['', 'Estágio', 'Trainee', 'Junior', 'Pleno', 'Senior']
@@ -112,13 +112,13 @@ export default function VagasPage() {
                     {job.location_type === 'internacional' && <Badge text="internacional" />}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{job.company}</p>
-                  {job.stacks.length > 0 && (
+                  {(job.stacks?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {job.stacks.slice(0, 6).map(s => (
+                      {job.stacks!.slice(0, 6).map(s => (
                         <Badge key={s} text={s} />
                       ))}
-                      {job.stacks.length > 6 && (
-                        <Badge text={`+${job.stacks.length - 6}`} />
+                      {job.stacks!.length > 6 && (
+                        <Badge text={`+${job.stacks!.length - 6}`} />
                       )}
                     </div>
                   )}
@@ -141,7 +141,7 @@ export default function VagasPage() {
                       <ExternalLink size={12} /> Ver vaga
                     </a>
                   )}
-                  <Badge text={job.platform} />
+                  {job.platform && <Badge text={job.platform} />}
                 </div>
               </li>
             ))}

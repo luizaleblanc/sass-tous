@@ -40,56 +40,84 @@ export const auth = {
   },
 
   register: (email: string, password: string) =>
-    request<{ id: number; email: string }>('/auth/register', {
+    request<{ id: string; email: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
 
-  me: () => request<{ id: number; email: string; seniority: string | null; stacks: string[] }>('/auth/me'),
+  me: () =>
+    request<UserProfile>('/auth/me'),
 
-  updateProfile: (data: {
-    seniority?: string
-    stacks?: string[]
-    work_modality?: string
-  }) => request('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+  updateProfile: (data: { seniority?: string; area?: string; stacks?: string[]; work_modality?: string; location_type?: string }) =>
+    request<UserProfile>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
-  uploadCV: (file: File) => {
+  uploadCV: (file: File, timeoutMs = 60_000) => {
     const form = new FormData()
     form.append('file', file)
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
     return fetch(`${BASE}/auth/cv`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
-    }).then(r => r.json())
+      signal: controller.signal,
+    })
+      .then(async (r) => {
+        clearTimeout(timer)
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}))
+          throw new Error(err?.detail ?? `HTTP ${r.status}`)
+        }
+        return r.json() as Promise<UserProfile>
+      })
+      .catch((err) => {
+        clearTimeout(timer)
+        if (err.name === 'AbortError') {
+          throw new Error('O processamento do CV demorou muito. Tente um arquivo menor ou preencha manualmente.')
+        }
+        throw err
+      })
   },
 }
 
-// Jobs
-export type Job = {
-  id: number
-  title: string
-  company: string
-  url: string
-  platform: string
+export type UserProfile = {
+  id: string
+  email: string
   seniority: string | null
-  stacks: string[]
-  location_type: string
-  work_modality: string
+  area: string | null
+  stacks: string[] | null
+  work_modality: string | null
+  location_type: string | null
+  cv_filename: string | null
+  cv_parsed: Record<string, unknown> | null
+  created_at: string
+}
+
+export type Job = {
+  id: string
+  title: string
+  company: string | null
+  url: string
+  platform: string | null
+  seniority: string | null
+  stacks: string[] | null
+  location_type: string | null
+  work_modality: string | null
   status: string
   application_type: string
   application_email: string | null
+  created_at: string
 }
 
 export type JobFilters = {
   platform?: string
   seniority?: string
-  stacks?: string
+  stack?: string
   location_type?: string
   work_modality?: string
   status?: string
-  page?: number
-  page_size?: number
+  application_type?: string
 }
 
 export const jobs = {
@@ -101,13 +129,27 @@ export const jobs = {
     return request<Job[]>(`/automation/jobs?${params}`)
   },
 
-  matches: (filters: { seniority?: string; work_modality?: string } = {}) => {
-    const params = new URLSearchParams()
-    if (filters.seniority) params.set('seniority', filters.seniority)
-    if (filters.work_modality) params.set('work_modality', filters.work_modality)
-    return request<Job[]>(`/automation/matches?${params}`)
-  },
+  matches: () =>
+    request<Job[]>('/automation/jobs/matches'),
 
-  run: (data: { keywords?: string[]; platforms?: string[]; target_urls?: string[] }) =>
-    request('/automation/run', { method: 'POST', body: JSON.stringify(data) }),
+  start: (data: { keywords?: string[]; platforms?: string[]; target_urls?: string[] }) =>
+    request<{ message: string; job_id: string }>('/automation/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (jobId: string) =>
+    request<void>(`/automation/jobs/${jobId}`, { method: 'DELETE' }),
+
+  applyPlatform: (jobIds: string[]) =>
+    request('/automation/apply/platform', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds }),
+    }),
+
+  applyEmail: (payload: { job_ids: string[]; subject: string; body: string }) =>
+    request('/automation/apply/email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 }
