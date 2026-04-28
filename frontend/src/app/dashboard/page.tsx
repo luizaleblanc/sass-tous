@@ -158,6 +158,7 @@ function NavButtons({ active, onChange }: { active: string; onChange: (tab: stri
   const tabs = [
     { id: 'automacao', label: 'Automação' },
     { id: 'vagas', label: 'Minhas Vagas' },
+    { id: 'email', label: 'Email' },
     { id: 'candidaturas', label: 'Candidaturas' },
     { id: 'perfil', label: 'Perfil' },
   ]
@@ -638,6 +639,155 @@ function VagasTab({ profile }: { profile: UserProfile }) {
         ))}
       </div>
     </>
+  )
+}
+
+function EmailTab({ profile }: { profile: UserProfile }) {
+  const [list, setList] = useState<Job[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    const username = profile.email.split('@')[0]
+    const stacksList = profile.stacks?.join(', ') ?? ''
+    setSubject('Candidatura — [Vaga]')
+    setBody(
+      `Olá,\n\nMeu nome é ${username} e tenho interesse em oportunidades na área de desenvolvimento.\n\nTenho experiência com: ${stacksList}.\n\nFico à disposição para conversar sobre possíveis oportunidades.\n\nAtenciosamente,\n${profile.email}`
+    )
+    jobs.list({ application_type: 'email' })
+      .then(setList)
+      .catch(() => setList([]))
+      .finally(() => setLoading(false))
+  }, [profile])
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === list.length ? new Set() : new Set(list.map((j) => j.id))
+    )
+  }
+
+  async function handleSend() {
+    if (selected.size === 0) return
+    setSending(true)
+    setMsg('')
+    try {
+      await jobs.applyEmail({ job_ids: [...selected], subject, body })
+      setList((prev) => prev.map((j) => selected.has(j.id) ? { ...j, status: 'Aplicada' } : j))
+      setSelected(new Set())
+      setMsg(`${selected.size} email(s) enviados com sucesso!`)
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Erro ao enviar emails.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (loading) return <p className="text-sm text-[#1a2e8a]/50 py-10 text-center">Carregando...</p>
+
+  return (
+    <div className="flex flex-col gap-6">
+      {list.length === 0 ? (
+        <EmptyState message="Nenhuma vaga com candidatura por email encontrada. Rode a automação primeiro." />
+      ) : (
+        <>
+          <div className="rounded-2xl border border-[#1a2e8a]/10 bg-white p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">
+                {list.length} vaga{list.length !== 1 ? 's' : ''} com email · {selected.size} selecionada{selected.size !== 1 ? 's' : ''}
+              </p>
+              <button
+                onClick={toggleAll}
+                className="text-xs font-semibold text-[#1a2e8a] underline underline-offset-2 hover:opacity-70"
+              >
+                {selected.size === list.length ? 'Desmarcar todas' : 'Selecionar todas'}
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+              {list.map((j) => (
+                <label
+                  key={j.id}
+                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+                    selected.has(j.id) ? 'border-[#1a2e8a] bg-[#1a2e8a]/5' : 'border-[#1a2e8a]/10 hover:bg-[#1a2e8a]/5'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(j.id)}
+                    onChange={() => toggleSelect(j.id)}
+                    className="accent-[#1a2e8a]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-[#1a2e8a] text-sm truncate">{j.title}</p>
+                    <p className="text-xs text-[#1a2e8a]/50 truncate">
+                      {j.company ?? '—'} · <span className="font-medium">{j.application_email}</span>
+                    </p>
+                  </div>
+                  {j.status === 'Aplicada' && (
+                    <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-600">
+                      Enviado
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Assunto</label>
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 text-sm text-[#1a2e8a] outline-none focus:border-[#1a2e8a]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Mensagem</label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                className="rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 text-sm text-[#1a2e8a] outline-none focus:border-[#1a2e8a] resize-none leading-relaxed"
+              />
+            </div>
+
+            {msg && (
+              <p className={`rounded-xl border px-4 py-3 text-sm ${
+                msg.includes('sucesso') ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-600'
+              }`}>
+                {msg}
+              </p>
+            )}
+
+            <button
+              onClick={handleSend}
+              disabled={sending || selected.size === 0 || !subject.trim() || !body.trim()}
+              className="flex items-center justify-center gap-2 rounded-full bg-[#1a2e8a] py-3.5 text-sm font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+            >
+              {sending ? (
+                <><Loader2 size={15} className="animate-spin" /> Enviando {selected.size} email(s)...</>
+              ) : (
+                <><Send size={15} /> Enviar para {selected.size} vaga{selected.size !== 1 ? 's' : ''}</>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -1157,12 +1307,14 @@ export default function DashboardPage() {
           <h1 className="font-display-condensed text-[#1a2e8a] text-4xl leading-none mb-6">
             {tab === 'automacao' && 'AUTOMAÇÃO'}
             {tab === 'vagas' && 'MINHAS VAGAS'}
+            {tab === 'email' && 'CANDIDATURA POR EMAIL'}
             {tab === 'candidaturas' && 'CANDIDATURAS'}
             {tab === 'perfil' && 'PERFIL'}
           </h1>
 
           {tab === 'automacao' && <AutomacaoTab profile={profile} onNavigateToVagas={() => setTab('vagas')} />}
           {tab === 'vagas' && <VagasTab profile={profile} />}
+          {tab === 'email' && <EmailTab profile={profile} />}
           {tab === 'candidaturas' && <CandidaturasTab />}
           {tab === 'perfil' && <PerfilTab profile={profile} onUpdate={setProfile} />}
         </div>

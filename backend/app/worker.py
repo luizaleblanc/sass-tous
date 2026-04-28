@@ -15,7 +15,7 @@ _UA = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 _CONCURRENCY = 8
-_LIMIT_PER_URL = 10
+_LIMIT_PER_URL = 25
 _URL_TIMEOUT = 30  # seconds per URL before giving up
 
 

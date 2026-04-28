@@ -48,7 +48,7 @@ class ScrapedJob:
     seniority: Optional[str] = None
     stacks: list[str] = field(default_factory=list)
     location_type: str = "nacional"
-    work_modality: str = "presencial"
+    work_modality: Optional[str] = None
 
 
 def extract_email(text: str) -> Optional[str]:
@@ -95,10 +95,10 @@ def detect_location_type(text: str, platform: str = "") -> str:
     return "nacional"
 
 
-def detect_work_modality(text: str, platform: str = "") -> str:
+def detect_work_modality(text: str, platform: str = "") -> str | None:
     lower = text.lower()
     if any(t in lower for t in _REMOTE_WORK_TERMS) or platform == "remoteok":
         return "remoto"
     if any(t in lower for t in _HYBRID_WORK_TERMS):
         return "hibrido"
-    return "presencial"
+    return None  # unknown — don't filter out by default
