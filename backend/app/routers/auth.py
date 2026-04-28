@@ -13,6 +13,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 _VALID_SENIORITY = {"Estágio", "Trainee", "Junior", "Pleno", "Senior"}
 _VALID_WORK_MODALITY = {"remoto", "presencial", "hibrido"}
+_VALID_AREA = {"backend", "frontend", "fullstack", "mobile", "qa", "ux_ui", "devops", "data", "seguranca", "produto"}
+_VALID_LOCATION_TYPE = {"nacional", "internacional", "ambos"}
 _ALLOWED_CV_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
 
 
@@ -59,6 +61,13 @@ async def update_profile(
                 detail=f"Senioridade inválida. Valores aceitos: {sorted(_VALID_SENIORITY)}",
             )
         current_user.seniority = payload.seniority
+    if payload.area is not None:
+        if payload.area not in _VALID_AREA:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Área inválida. Valores aceitos: {sorted(_VALID_AREA)}",
+            )
+        current_user.area = payload.area
     if payload.stacks is not None:
         current_user.stacks = payload.stacks
     if payload.work_modality is not None:
@@ -68,6 +77,13 @@ async def update_profile(
                 detail=f"Modalidade inválida. Valores aceitos: {sorted(_VALID_WORK_MODALITY)}",
             )
         current_user.work_modality = payload.work_modality
+    if payload.location_type is not None:
+        if payload.location_type not in _VALID_LOCATION_TYPE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo de localização inválido. Valores aceitos: {sorted(_VALID_LOCATION_TYPE)}",
+            )
+        current_user.location_type = payload.location_type
     await db.commit()
     await db.refresh(current_user)
     return current_user
@@ -86,9 +102,10 @@ async def upload_cv(
             detail=f"Formato não suportado. Aceitos: {sorted(_ALLOWED_CV_EXTENSIONS)}",
         )
 
+    from fastapi.concurrency import run_in_threadpool
     from ..cv_parser import parse_cv
     content = await file.read()
-    parsed = parse_cv(content, file.filename)
+    parsed = await run_in_threadpool(parse_cv, content, file.filename)
 
     current_user.cv_filename = file.filename
     current_user.cv_text = parsed.pop("raw_text", "")

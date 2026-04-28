@@ -1,5 +1,7 @@
+import re
 import logging
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
+import httpx
+from playwright.async_api import Page
 from .base import ScrapedJob, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
 
 logger = logging.getLogger(__name__)
@@ -7,41 +9,65 @@ PLATFORM = "linkedin"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
-    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
-        await page.wait_for_selector(".job-search-card, .base-card", timeout=12000)
-    except PlaywrightTimeout:
-        logger.warning("[linkedin] Nenhum card encontrado — pode exigir login")
+        return await _scrape_api(url, limit)
+    except Exception as e:
+        logger.warning(f"[linkedin] API falhou ({e}), retornando vazio")
         return []
 
-    cards = await page.locator(".job-search-card, .base-card").all()
+
+async def _scrape_api(url: str, limit: int = 15) -> list[ScrapedJob]:
+    from urllib.parse import urlparse, parse_qs
+    qs = parse_qs(urlparse(url).query)
+    keywords = qs.get("keywords", ["dev"])[0]
+
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        "Referer": "https://www.linkedin.com/jobs/",
+    }) as client:
+        resp = await client.get(
+            "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search",
+            params={"keywords": keywords, "location": "Brazil", "start": 0, "count": min(limit, 25)},
+        )
+        resp.raise_for_status()
+        html = resp.text
+
+    # Extract job cards from HTML fragment
+    titles = re.findall(
+        r'<h3[^>]*class="[^"]*base-search-card__title[^"]*"[^>]*>\s*(.*?)\s*</h3>',
+        html, re.DOTALL,
+    )
+    companies = re.findall(
+        r'<h4[^>]*class="[^"]*base-search-card__subtitle[^"]*"[^>]*>.*?<a[^>]*>(.*?)</a>',
+        html, re.DOTALL,
+    )
+    job_urls = re.findall(
+        r'href="(https://www\.linkedin\.com/jobs/view/[^"?]+)',
+        html,
+    )
+
     jobs = []
+    for i in range(min(len(titles), len(job_urls), limit)):
+        title = re.sub(r"<[^>]+>", "", titles[i]).strip()
+        company = re.sub(r"<[^>]+>", "", companies[i]).strip() if i < len(companies) else ""
 
-    for card in cards[:limit]:
-        try:
-            title = await card.locator(
-                "h3.base-search-card__title, .job-search-card__title"
-            ).inner_text(timeout=2000)
-            company = await card.locator(
-                "h4.base-search-card__subtitle, .job-search-card__company-name"
-            ).inner_text(timeout=2000)
-            href = await card.locator(
-                "a.base-card__full-link, a[data-tracking-control-name]"
-            ).first.get_attribute("href") or url
-
-            jobs.append(ScrapedJob(
-                title=title.strip(),
-                company=company.strip(),
-                url=href,
-                platform=PLATFORM,
-                application_type="platform",
-                seniority=detect_seniority(title),
-                stacks=detect_stacks(title),
-                location_type=detect_location_type(title, PLATFORM),
-                work_modality=detect_work_modality(title, PLATFORM),
-            ))
-        except Exception:
+        if not title:
             continue
 
-    logger.info(f"[linkedin] {len(jobs)} vagas extraídas")
+        corpus = f"{title} {company}"
+        jobs.append(ScrapedJob(
+            title=title,
+            company=company,
+            url=job_urls[i],
+            platform=PLATFORM,
+            application_type="platform",
+            seniority=detect_seniority(corpus),
+            stacks=detect_stacks(corpus),
+            location_type=detect_location_type(corpus, PLATFORM),
+            work_modality=detect_work_modality(corpus, PLATFORM),
+        ))
+
+    logger.info(f"[linkedin-api] {len(jobs)} vagas extraídas (keywords={keywords})")
     return jobs

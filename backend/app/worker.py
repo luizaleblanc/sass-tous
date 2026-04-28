@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import os
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, Browser
 from arq.connections import RedisSettings
 from .database import SessionLocal
 from .models import Job
@@ -8,29 +9,49 @@ from .scrapers.dispatcher import dispatch
 
 logger = logging.getLogger(__name__)
 
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+_CONCURRENCY = 8
+_LIMIT_PER_URL = 10
+_URL_TIMEOUT = 30  # seconds per URL before giving up
+
+
+async def _scrape_one(browser: Browser, url: str, sem: asyncio.Semaphore) -> list:
+    async with sem:
+        page = await browser.new_page(user_agent=_UA)
+        try:
+            result = await asyncio.wait_for(
+                dispatch(page, url, limit=_LIMIT_PER_URL),
+                timeout=_URL_TIMEOUT,
+            )
+            logger.info(f"[WORKER] {len(result)} vagas de {url}")
+            return result
+        except asyncio.TimeoutError:
+            logger.warning(f"[WORKER] Timeout em {url}")
+            return []
+        except Exception as e:
+            logger.error(f"[WORKER] Erro em {url}: {e}")
+            return []
+        finally:
+            await page.close()
+
 
 async def perform_scraping(ctx, target_urls: list[str], user_id: str):
-    logger.info(f"[WORKER] Scraping de {len(target_urls)} site(s) para user {user_id}")
-    all_jobs = []
+    logger.info(f"[WORKER] Scraping de {len(target_urls)} URL(s) para user {user_id}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            )
+        sem = asyncio.Semaphore(_CONCURRENCY)
+        results = await asyncio.gather(
+            *[_scrape_one(browser, url, sem) for url in target_urls],
+            return_exceptions=False,
         )
-        for url in target_urls:
-            try:
-                jobs = await dispatch(page, url)
-                all_jobs.extend(jobs)
-                logger.info(f"[WORKER] {len(jobs)} vagas de {url}")
-            except Exception as e:
-                logger.error(f"[WORKER] Erro em {url}: {e}")
-
         await browser.close()
+
+    all_jobs = [job for batch in results for job in batch]
 
     async with SessionLocal() as db:
         for j in all_jobs:

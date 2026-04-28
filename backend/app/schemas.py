@@ -18,8 +18,10 @@ class UserResponse(BaseModel):
 
 class UserProfileUpdate(BaseModel):
     seniority: Optional[str] = None
+    area: Optional[str] = None
     stacks: Optional[list[str]] = None
     work_modality: Optional[str] = None
+    location_type: Optional[str] = None
 
 
 class CVData(BaseModel):
@@ -36,8 +38,10 @@ class UserProfileResponse(BaseModel):
     id: str
     email: EmailStr
     seniority: Optional[str]
+    area: Optional[str]
     stacks: Optional[list[str]]
     work_modality: Optional[str]
+    location_type: Optional[str]
     cv_filename: Optional[str]
     cv_parsed: Optional[dict]
     created_at: datetime

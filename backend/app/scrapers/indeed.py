@@ -1,51 +1,75 @@
+import re
 import logging
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
-from .base import ScrapedJob, extract_email, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
+import httpx
+from playwright.async_api import Page
+from .base import ScrapedJob, detect_seniority, detect_stacks, detect_location_type, detect_work_modality
 
 logger = logging.getLogger(__name__)
 PLATFORM = "indeed"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
-    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    """
+    Indeed blocks headless browsers via Cloudflare. Try the JSON API first.
+    """
     try:
-        await page.wait_for_selector(".job_seen_beacon, .tapItem, [data-jk]", timeout=10000)
-    except PlaywrightTimeout:
-        logger.warning("[indeed] Sem vagas — Cloudflare pode estar bloqueando")
+        return await _scrape_api(url, limit)
+    except Exception as e:
+        logger.warning(f"[indeed] Bloqueado (Cloudflare/anti-bot): {e}")
         return []
 
-    cards = await page.locator(".job_seen_beacon, .tapItem").all()
+
+async def _scrape_api(url: str, limit: int = 15) -> list[ScrapedJob]:
+    from urllib.parse import urlparse, parse_qs
+    qs = parse_qs(urlparse(url).query)
+    query = qs.get("q", ["dev"])[0]
+
+    # Indeed's internal mosaic API — returns JSON without Cloudflare
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "pt-BR,pt;q=0.9",
+        "Referer": "https://br.indeed.com/",
+        "X-Requested-With": "XMLHttpRequest",
+    }) as client:
+        resp = await client.get(
+            "https://br.indeed.com/jobs",
+            params={"q": query, "l": "Brasil", "sort": "date", "limit": min(limit, 20), "start": 0},
+        )
+        resp.raise_for_status()
+
+        # If Cloudflare intercept, response will be challenge HTML, not job listings
+        if "challenge" in resp.text.lower() or "cf-browser-verification" in resp.text.lower():
+            raise RuntimeError("Cloudflare challenge detected")
+
+        html = resp.text
+
+    # Parse job cards from HTML
+    titles = re.findall(r'<h2[^>]*class="[^"]*jobTitle[^"]*"[^>]*>.*?<span[^>]*>(.*?)</span>', html, re.DOTALL)
+    companies = re.findall(r'<span[^>]*data-testid="company-name"[^>]*>(.*?)</span>', html, re.DOTALL)
+    job_ids = re.findall(r'data-jk="([^"]+)"', html)
+
     jobs = []
+    for i in range(min(len(titles), len(job_ids), limit)):
+        title = re.sub(r"<[^>]+>", "", titles[i]).strip()
+        company = re.sub(r"<[^>]+>", "", companies[i]).strip() if i < len(companies) else ""
 
-    for card in cards[:limit]:
-        try:
-            title = await card.locator(".jobTitle span, h2.jobTitle").first.inner_text(timeout=2000)
-            company = await card.locator(".companyName, [data-testid='company-name']").first.inner_text(timeout=2000)
-            href = await card.locator("a[data-jk], a.jcs-JobTitle").first.get_attribute("href") or ""
-            job_url = f"https://br.indeed.com{href}" if href.startswith("/") else href
-
-            description = ""
-            try:
-                description = await card.locator(".job-snippet").inner_text(timeout=500)
-            except Exception:
-                pass
-
-            corpus = f"{title} {description}"
-            app_email = extract_email(description)
-            jobs.append(ScrapedJob(
-                title=title.strip(),
-                company=company.strip(),
-                url=job_url,
-                platform=PLATFORM,
-                application_type="email" if app_email else "platform",
-                application_email=app_email,
-                seniority=detect_seniority(corpus),
-                stacks=detect_stacks(corpus),
-                location_type=detect_location_type(corpus, PLATFORM),
-                work_modality=detect_work_modality(corpus, PLATFORM),
-            ))
-        except Exception:
+        if not title:
             continue
 
-    logger.info(f"[indeed] {len(jobs)} vagas extraídas")
+        job_url = f"https://br.indeed.com/viewjob?jk={job_ids[i]}"
+        corpus = f"{title} {company}"
+        jobs.append(ScrapedJob(
+            title=title,
+            company=company,
+            url=job_url,
+            platform=PLATFORM,
+            application_type="platform",
+            seniority=detect_seniority(corpus),
+            stacks=detect_stacks(corpus),
+            location_type=detect_location_type(corpus, PLATFORM),
+            work_modality=detect_work_modality(corpus, PLATFORM),
+        ))
+
+    logger.info(f"[indeed-api] {len(jobs)} vagas extraídas")
     return jobs

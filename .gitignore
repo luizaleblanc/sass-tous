@@ -1,9 +1,24 @@
 
+# Python
 __pycache__/
 *.pyc
 venv/
 .env
+
+# Infrastructure
 infra/mysql/
 infra/mysql_v2/
 infra/mysql_v3/
 .docker/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/out/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.env.local
+frontend/.env*.local

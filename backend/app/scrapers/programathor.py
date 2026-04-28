@@ -7,9 +7,9 @@ PLATFORM = "programathor"
 
 
 async def scrape(page: Page, url: str, limit: int = 15) -> list[ScrapedJob]:
-    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    await page.goto(url, wait_until="domcontentloaded", timeout=15000)
     try:
-        await page.wait_for_selector(".vacancy-cell, .job-item, [class*='vacancy']", timeout=10000)
+        await page.wait_for_selector(".vacancy-cell, .job-item, [class*='vacancy']", timeout=7000)
     except PlaywrightTimeout:
         logger.warning(f"[programathor] Nenhuma vaga encontrada em {url}")
         return []
