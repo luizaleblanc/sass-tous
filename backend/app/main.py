@@ -13,8 +13,7 @@ async def lifespan(app: FastAPI):
     app.state.redis_pool = await create_pool(RedisSettings(host='redis', port=6379))
     logger.info("Conexao com a Fila Redis estabelecida.")
     yield
-    app.state.redis_pool.close()
-    await app.state.redis_pool.wait_closed()
+    await app.state.redis_pool.aclose()
 
 app = FastAPI(title="SaaS Automacao de Vagas - DevSecOps API", lifespan=lifespan)
 

@@ -64,6 +64,15 @@ export const auth = {
   updateProfile: (data: { seniority?: string; area?: string; stacks?: string[]; work_modality?: string; location_type?: string }) =>
     request<UserProfile>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
+  linkedinSession: (liAt: string, jsessionid?: string) =>
+    request<{ message: string; cookies_stored: number }>('/auth/linkedin/session', {
+      method: 'POST',
+      body: JSON.stringify({ li_at: liAt, jsessionid }),
+    }),
+
+  removeLinkedinSession: () =>
+    request<{ message: string }>('/auth/linkedin/session', { method: 'DELETE' }),
+
   uploadCV: (file: File, timeoutMs = 60_000) => {
     const form = new FormData()
     form.append('file', file)

@@ -15,6 +15,7 @@ MIGRATIONS = [
     "ALTER TABLE jobs ADD COLUMN work_modality VARCHAR(20) NULL DEFAULT 'presencial'",
     "ALTER TABLE users ADD COLUMN area VARCHAR(30) NULL",
     "ALTER TABLE users ADD COLUMN location_type VARCHAR(20) NULL",
+    "ALTER TABLE users ADD COLUMN linkedin_cookies TEXT NULL",
 ]
 
 

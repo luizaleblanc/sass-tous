@@ -22,11 +22,11 @@ async def _scrape_api(url: str, limit: int = 15) -> list[ScrapedJob]:
     if m:
         tag = m.group(1)
 
-    async with httpx.AsyncClient(timeout=15, headers={
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json",
     }) as client:
-        resp = await client.get("https://remoteok.io/api", params={"tag": tag})
+        resp = await client.get("https://remoteok.com/api", params={"tag": tag})
         resp.raise_for_status()
         data = resp.json()
 

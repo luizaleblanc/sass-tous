@@ -7,7 +7,7 @@ from sqlalchemy import select, delete
 from ..database import get_db
 from ..dependencies import get_current_user
 from ..models import Job, User
-from ..schemas import JobResponse, EmailApplyRequest, PlatformApplyRequest, PlatformApplyResponse
+from ..schemas import JobResponse, EmailApplyRequest, PlatformApplyRequest, PlatformApplyResponse, AutoApplyRequest
 
 router = APIRouter(prefix="/automation", tags=["Automation"])
 
@@ -19,6 +19,8 @@ _PLATFORM_URL = {
     "programathor": "https://programathor.com.br/jobs?search={encoded}",
     "infojobs":     "https://www.infojobs.com.br/empregos?q={encoded}",
     "solides":      "https://jobs.solides.com.br/?term={encoded}",
+    "catho":        "https://www.catho.com.br/vagas/{encoded}/",
+    "meupadrinho":  "https://meupadrinho.com/vagas?search={encoded}",
 }
 
 
@@ -183,6 +185,37 @@ async def apply_via_email(
             {"job_id": j.id, "title": j.title, "email": j.application_email}
             for j in valid_jobs
         ],
+    }
+
+
+@router.post("/apply/auto", status_code=status.HTTP_202_ACCEPTED)
+async def apply_auto(
+    payload: AutoApplyRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Enqueues automated Playwright-based application for the given job IDs.
+    Supports: LinkedIn Easy Apply (requires li_at session), Gupy, InfoJobs, RemoteOK.
+    Returns immediately — check worker logs for per-job results.
+    """
+    result = await db.execute(
+        select(Job).where(Job.id.in_(payload.job_ids), Job.owner_id == current_user.id)
+    )
+    valid_jobs = result.scalars().all()
+    if not valid_jobs:
+        raise HTTPException(status_code=404, detail="Nenhuma vaga encontrada nos IDs fornecidos")
+
+    arq_job = await request.app.state.redis_pool.enqueue_job(
+        "perform_auto_apply",
+        [j.id for j in valid_jobs],
+        current_user.id,
+    )
+    return {
+        "message": f"Auto-apply enfileirado para {len(valid_jobs)} vaga(s).",
+        "job_id": arq_job.job_id,
+        "targets": [{"job_id": j.id, "title": j.title, "platform": j.platform} for j in valid_jobs],
     }
 
 

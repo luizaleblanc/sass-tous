@@ -5,6 +5,37 @@ from typing import Optional
 EMAIL_RE = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
 _NOISE = {"noreply", "no-reply", "support", "info", "contact", "privacy", "legal"}
 
+# Multi-word and long signals checked via substring match (lowercase title)
+_TECH_TITLE_SIGNALS = frozenset({
+    # Portuguese tech roles
+    "desenvolvedor", "desenvolvedora", "programador", "programadora",
+    "engenheiro de software", "engenheira de software",
+    "engenheiro de dados", "engenheira de dados",
+    "analista de sistemas", "analista de dados", "analista de segurança",
+    "arquiteto de software", "arquiteta de software",
+    "suporte técnico", "técnico em ti", "técnica em ti",
+    # English tech roles
+    "developer", "engineer", "programmer", "architect",
+    "software", "data scientist", "data engineer", "data analyst",
+    "machine learning", "ml engineer", "ai engineer",
+    "tech lead", "technical lead", "quality assurance",
+    "devops", "platform engineer", "site reliability",
+    "cybersecurity", "security engineer", "penetration",
+    "product designer", "scrum master", "product owner",
+    # Tech areas that appear in titles
+    "frontend", "front-end", "backend", "back-end",
+    "fullstack", "full-stack", "full stack",
+    "mobile", "android", "cloud engineer",
+    "database administrator", "infrastructure",
+})
+
+# Short signals (<=3 chars) — require word-boundary check to avoid false positives
+_TECH_TITLE_SHORT = frozenset({"qa", "bi", "ux", "ui", "ios", "dba", "sre", "ti", "ti"})
+
+_TECH_TITLE_SHORT_RE = re.compile(
+    r'(?<![a-z0-9])(' + '|'.join(re.escape(t) for t in _TECH_TITLE_SHORT) + r')(?![a-z0-9])'
+)
+
 _SENIOR_TERMS  = {"senior", "sr", "lead", "staff", "principal", "architect", "head", "director", "vp"}
 _PLENO_TERMS   = {"pleno", "mid", "mid-level", "intermediate", "ii", "iii"}
 _JUNIOR_TERMS  = {"junior", "jr", "entry", "associate"}
@@ -102,3 +133,15 @@ def detect_work_modality(text: str, platform: str = "") -> str | None:
     if any(t in lower for t in _HYBRID_WORK_TERMS):
         return "hibrido"
     return None  # unknown — don't filter out by default
+
+
+def is_tech_relevant(title: str, stacks: list[str]) -> bool:
+    """Quality gate: the job title MUST contain a developer/engineer role signal.
+
+    Stacks alone are intentionally not sufficient — a 'Social Media Manager'
+    posting mentioning React should not pass. The title is the sole authority.
+    """
+    lower = title.lower()
+    if _TECH_TITLE_SHORT_RE.search(lower):
+        return True
+    return any(signal in lower for signal in _TECH_TITLE_SIGNALS)

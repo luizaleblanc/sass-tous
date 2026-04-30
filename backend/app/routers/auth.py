@@ -7,7 +7,7 @@ from ..database import get_db
 from ..models import User
 from ..auth import verify_password, create_access_token, get_password_hash
 from ..dependencies import get_current_user
-from ..schemas import UserCreate, UserResponse, Token, UserProfileUpdate, UserProfileResponse
+from ..schemas import UserCreate, UserResponse, Token, UserProfileUpdate, UserProfileResponse, LinkedInSessionRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -117,3 +117,44 @@ async def upload_cv(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.post("/linkedin/session", status_code=200)
+async def store_linkedin_session(
+    payload: LinkedInSessionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Stores the user's LinkedIn session cookie encrypted at rest.
+    The li_at cookie is LinkedIn's primary session identifier.
+    Retrieve it from browser DevTools → Application → Cookies → linkedin.com.
+    """
+    import json
+    from ..security import crypto_provider
+
+    cookies: list[dict] = [
+        {"name": "li_at", "value": payload.li_at, "domain": ".linkedin.com", "path": "/"}
+    ]
+    if payload.jsessionid:
+        cookies.append(
+            {"name": "JSESSIONID", "value": payload.jsessionid, "domain": ".linkedin.com", "path": "/"}
+        )
+
+    try:
+        current_user.linkedin_cookies = crypto_provider.encrypt_str(json.dumps(cookies))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criptografar sessão: {e}")
+
+    await db.commit()
+    return {"message": "Sessão do LinkedIn vinculada com sucesso.", "cookies_stored": len(cookies)}
+
+
+@router.delete("/linkedin/session", status_code=200)
+async def remove_linkedin_session(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_user.linkedin_cookies = None
+    await db.commit()
+    return {"message": "Sessão do LinkedIn removida."}

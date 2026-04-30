@@ -85,3 +85,19 @@ class PlatformApplyResponse(BaseModel):
     title: str
     platform: str
     url: str
+
+
+class LinkedInSessionRequest(BaseModel):
+    li_at: str
+    jsessionid: Optional[str] = None
+
+
+class AutoApplyRequest(BaseModel):
+    job_ids: list[str]
+
+
+class AutoApplyResultItem(BaseModel):
+    job_id: str
+    title: str
+    success: bool
+    message: str

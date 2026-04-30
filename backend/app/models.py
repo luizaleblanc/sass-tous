@@ -12,13 +12,14 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)
     seniority = Column(String(20), nullable=True)
-    area = Column(String(30), nullable=True)
+    area = Column(JSON, nullable=True)          # list[str]
     stacks = Column(JSON, nullable=True)
-    work_modality = Column(String(20), nullable=True)
-    location_type = Column(String(20), nullable=True)
+    work_modality = Column(JSON, nullable=True)  # list[str]
+    location_type = Column(JSON, nullable=True)  # list[str]
     cv_filename = Column(String(255), nullable=True)
     cv_text = Column(Text, nullable=True)
     cv_parsed = Column(JSON, nullable=True)
+    linkedin_cookies = Column(Text, nullable=True)  # AES-GCM encrypted JSON (li_at session)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     jobs = relationship("Job", back_populates="owner", cascade="all, delete-orphan")
