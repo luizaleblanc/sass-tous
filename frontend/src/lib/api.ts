@@ -174,4 +174,10 @@ export const jobs = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  applyAuto: (jobIds: string[]) =>
+    request<{ message: string; job_id: string }>('/automation/apply/auto', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds }),
+    }),
 }

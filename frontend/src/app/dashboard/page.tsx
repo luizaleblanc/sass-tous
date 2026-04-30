@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Trash2, Upload, Plus, X, ChevronRight, LogOut, Loader2, CheckCircle2, Mail, Send } from 'lucide-react'
+import { ExternalLink, Trash2, Upload, Plus, X, ChevronRight, LogOut, Loader2, CheckCircle2, Mail, Send, Zap, Key, Eye, EyeOff } from 'lucide-react'
 import { auth, jobs, UserProfile, Job } from '@/lib/api'
 
 // ─── CV Upload Button ───────────────────────────────────────────────────────
@@ -150,7 +150,11 @@ const PLATFORMS = [
   { key: 'remoteok', label: 'RemoteOK' },
   { key: 'solides', label: 'Sólides' },
   { key: 'glassdoor', label: 'Glassdoor' },
+  { key: 'catho', label: 'Catho' },
+  { key: 'meupadrinho', label: 'Meu Padrinho' },
 ]
+
+const AUTO_APPLY_PLATFORMS = new Set(['linkedin', 'gupy', 'remoteok', 'infojobs'])
 
 // ─── Shared Components ──────────────────────────────────────────────────────
 
@@ -181,14 +185,20 @@ function NavButtons({ active, onChange }: { active: string; onChange: (tab: stri
   )
 }
 
+type AutoApplyState = 'idle' | 'loading' | 'done' | 'error'
+
 function JobCard({
   job,
   onDelete,
   onApplyEmail,
+  onApplyAuto,
+  autoApplyState = 'idle',
 }: {
   job: Job
   onDelete?: (id: string) => void
   onApplyEmail?: () => void
+  onApplyAuto?: () => void
+  autoApplyState?: AutoApplyState
 }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-2xl bg-white border border-[#1a2e8a]/10 px-5 py-4 shadow-sm">
@@ -239,6 +249,28 @@ function JobCard({
           >
             <ExternalLink size={14} />
           </a>
+        )}
+        {onApplyAuto && AUTO_APPLY_PLATFORMS.has(job.platform ?? '') && (
+          <button
+            onClick={onApplyAuto}
+            disabled={autoApplyState === 'loading' || autoApplyState === 'done'}
+            title={autoApplyState === 'done' ? 'Candidatura enviada' : 'Auto-candidatar'}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+              autoApplyState === 'done'
+                ? 'bg-green-100 text-green-500 cursor-default'
+                : autoApplyState === 'error'
+                ? 'bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600'
+                : 'bg-[#1a2e8a]/10 text-[#1a2e8a] hover:bg-[#1a2e8a] hover:text-white'
+            }`}
+          >
+            {autoApplyState === 'loading' ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : autoApplyState === 'done' ? (
+              <CheckCircle2 size={14} />
+            ) : (
+              <Zap size={14} />
+            )}
+          </button>
         )}
         {onDelete && (
           <button
@@ -526,6 +558,7 @@ function VagasTab({ profile }: { profile: UserProfile }) {
   const [polling, setPolling] = useState(false)
   const [pollAttempt, setPollAttempt] = useState(0)
   const [emailJob, setEmailJob] = useState<Job | null>(null)
+  const [autoApplyStates, setAutoApplyStates] = useState<Record<string, AutoApplyState>>({})
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function load(silent = false) {
@@ -583,6 +616,17 @@ function VagasTab({ profile }: { profile: UserProfile }) {
     setList((prev) => prev.filter((j) => j.id !== id))
   }
 
+  async function handleAutoApply(jobId: string) {
+    setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'loading' }))
+    try {
+      await jobs.applyAuto([jobId])
+      setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'done' }))
+      setList((prev) => prev.map((j) => j.id === jobId ? { ...j, status: 'Aplicada' } : j))
+    } catch {
+      setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'error' }))
+    }
+  }
+
   if (loading) return <p className="text-sm text-[#1a2e8a]/50 py-10 text-center">Carregando vagas...</p>
 
   return (
@@ -635,6 +679,8 @@ function VagasTab({ profile }: { profile: UserProfile }) {
             job={j}
             onDelete={handleDelete}
             onApplyEmail={j.application_type === 'email' ? () => setEmailJob(j) : undefined}
+            onApplyAuto={() => handleAutoApply(j.id)}
+            autoApplyState={autoApplyStates[j.id] ?? 'idle'}
           />
         ))}
       </div>
@@ -755,8 +801,33 @@ function EmailTab({ profile }: { profile: UserProfile }) {
               />
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Mensagem</label>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Mensagem</label>
+                <span className="text-xs text-[#1a2e8a]/30">clique para inserir variável</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  ['{sender_name}', 'nome'],
+                  ['{email}', 'email'],
+                  ['{phone}', 'telefone'],
+                  ['{linkedin}', 'linkedin'],
+                  ['{portfolio}', 'portfolio'],
+                  ['{seniority}', 'senioridade'],
+                  ['{stacks}', 'tecnologias'],
+                  ['{job_title}', 'vaga'],
+                  ['{company}', 'empresa'],
+                ].map(([tag, label]) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setBody((b) => b + tag)}
+                    className="rounded-full bg-[#1a2e8a]/5 px-2.5 py-1 text-xs font-mono text-[#1a2e8a]/70 transition-colors hover:bg-[#1a2e8a]/15 hover:text-[#1a2e8a]"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -827,6 +898,10 @@ function PerfilTab({ profile, onUpdate }: { profile: UserProfile; onUpdate: (p: 
   const [locationType, setLocationType] = useState(profile.location_type ?? '')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [liAt, setLiAt] = useState('')
+  const [liAtVisible, setLiAtVisible] = useState(false)
+  const [liSaving, setLiSaving] = useState(false)
+  const [liMsg, setLiMsg] = useState('')
 
   function toggleStack(s: string) {
     setSelectedStacks((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -865,11 +940,90 @@ function PerfilTab({ profile, onUpdate }: { profile: UserProfile; onUpdate: (p: 
     setMsg('CV processado! Suas tecnologias foram atualizadas.')
   }
 
+  async function handleSaveLiAt() {
+    setLiSaving(true)
+    setLiMsg('')
+    try {
+      await auth.linkedinSession(liAt.trim())
+      setLiMsg('Sessão LinkedIn salva com sucesso!')
+      setLiAt('')
+    } catch (err) {
+      setLiMsg(err instanceof Error ? err.message : 'Erro ao salvar sessão.')
+    } finally {
+      setLiSaving(false)
+    }
+  }
+
+  async function handleRemoveLiAt() {
+    setLiSaving(true)
+    setLiMsg('')
+    try {
+      await auth.removeLinkedinSession()
+      setLiMsg('Sessão LinkedIn removida.')
+    } catch (err) {
+      setLiMsg(err instanceof Error ? err.message : 'Erro ao remover sessão.')
+    } finally {
+      setLiSaving(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">CV</label>
         <CVUploadButton onUpload={handleCVUpload} currentFilename={profile.cv_filename} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">
+          Sessão LinkedIn{' '}
+          <span className="normal-case font-normal text-[#1a2e8a]/30">(para auto-candidatura)</span>
+        </label>
+        <p className="text-xs text-[#1a2e8a]/40">
+          Cole seu cookie <code className="font-mono bg-[#1a2e8a]/5 px-1 rounded">li_at</code> para habilitar auto-candidatura no LinkedIn. Obtenha-o nas DevTools do navegador após fazer login.
+        </p>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type={liAtVisible ? 'text' : 'password'}
+              value={liAt}
+              onChange={(e) => setLiAt(e.target.value)}
+              placeholder="AQEDATi..."
+              className="w-full rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 pr-10 text-sm text-[#1a2e8a] font-mono outline-none focus:border-[#1a2e8a]"
+            />
+            <button
+              type="button"
+              onClick={() => setLiAtVisible((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1a2e8a]/30 hover:text-[#1a2e8a]"
+            >
+              {liAtVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <button
+            onClick={handleSaveLiAt}
+            disabled={liSaving || !liAt.trim()}
+            className="flex items-center gap-1.5 rounded-xl bg-[#1a2e8a] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+          >
+            {liSaving ? <Loader2 size={13} className="animate-spin" /> : <Key size={13} />}
+            Salvar
+          </button>
+        </div>
+        <button
+          onClick={handleRemoveLiAt}
+          disabled={liSaving}
+          className="self-start text-xs font-semibold text-red-400 transition-colors hover:text-red-600 disabled:opacity-40"
+        >
+          Remover sessão
+        </button>
+        {liMsg && (
+          <p className={`rounded-xl border px-4 py-3 text-sm ${
+            liMsg.includes('sucesso') || liMsg.includes('removida')
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-red-200 bg-red-50 text-red-600'
+          }`}>
+            {liMsg}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
