@@ -156,24 +156,22 @@ export function EmailDispatch({ profile }: { profile: UserProfile }) {
   }, [])
 
   useEffect(() => {
-    // Build default template using profile data as preview
-    const namePreview = (profile.email || '').split('@')[0].replace(/[._]/g, ' ')
-      .split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    const stackPreview = profile.stacks?.join(', ') ?? ''
-
-    setSubject('Candidatura para {job_title} — {sender_name}')
+    setSubject('Candidatura — {sender_name} | Desenvolvedor Full Stack')
     setBody(
-      `Olá, equipe da {company},\n\n` +
-      `Meu nome é {sender_name} e tenho interesse na vaga de {job_title}.\n\n` +
-      `Possuo experiência com: ${stackPreview || '{stacks}'}.\n\n` +
-      `Meu portfolio: {portfolio}\n` +
+      `Ola,\n\n` +
+      `Meu nome e {sender_name} e sou Desenvolvedor Full Stack com cerca de 4 anos de experiencia no desenvolvimento de aplicacoes completas, desde interfaces profissionais ate APIs, microsservicos, automacoes e integracoes entre sistemas.\n\n` +
+      `Tenho experiencia pratica em CRM, criacao de agentes de IA, automacoes inteligentes e e-commerces, sempre entregando solucoes estaveis e de impacto direto nos processos internos.\n\n` +
+      `Minhas principais habilidades tecnicas incluem:\n` +
+      `Front-end: HTML, CSS, JavaScript, TypeScript, Next.js, React\n` +
+      `Back-end: Node.js, NestJS, express.js, Python, Django, REST APIs, microsservicos\n` +
+      `Banco de Dados & DevOps: Docker, CI/CD, MongoDB, PostgreSQL\n\n` +
+      `Portfolio: {portfolio}\n` +
       `Contato: {email}\n\n` +
-      `Fico à disposição para conversar sobre a oportunidade.\n\n` +
+      `Fico a disposicao para conversarmos sobre a oportunidade.\n\n` +
       `Atenciosamente,\n{sender_name}`
     )
 
-    // Check if linkedin session exists (cv_parsed carries no signal; we infer from profile)
-    setHasLinkedIn(false)
+    setHasLinkedIn(profile.has_linkedin_session ?? false)
     loadJobs()
   }, [profile, loadJobs])
 

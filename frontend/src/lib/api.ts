@@ -17,6 +17,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('token')
+        if (!window.location.pathname.startsWith('/entrar') && !window.location.pathname.startsWith('/cadastro')) {
+          window.location.href = '/entrar'
+        }
+      }
       throw new Error(body?.detail ?? `HTTP ${res.status}`)
     }
     return res.json() as Promise<T>
@@ -53,9 +59,21 @@ export const auth = {
   },
 
   register: (email: string, password: string) =>
-    request<{ id: string; email: string }>('/auth/register', {
+    request<{ id: string; email: string; requires_verification: boolean }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+
+  verifyEmail: (email: string, code: string) =>
+    request<{ message: string }>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    }),
+
+  resendVerification: (email: string) =>
+    request<{ message: string }>('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
 
   me: () =>
@@ -72,6 +90,53 @@ export const auth = {
 
   removeLinkedinSession: () =>
     request<{ message: string }>('/auth/linkedin/session', { method: 'DELETE' }),
+
+  connectLinkedIn: (email: string, password: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 90_000)
+    return fetch(`${BASE}/auth/linkedin/connect`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    }).then(async (r) => {
+      clearTimeout(timer)
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err?.detail ?? `HTTP ${r.status}`)
+      }
+      return r.json() as Promise<LinkedInConnectResult>
+    }).catch((err) => {
+      clearTimeout(timer)
+      if (err.name === 'AbortError') throw new Error('Conexão com LinkedIn demorou muito. Tente o método manual.')
+      throw err
+    })
+  },
+
+  verifyLinkedIn2FA: (challenge_id: string, code: string) =>
+    request<{ status: string; message: string; cookies_stored: number }>('/auth/linkedin/2fa', {
+      method: 'POST',
+      body: JSON.stringify({ challenge_id, code }),
+    }),
+
+  connectGupy: (email: string, password: string) =>
+    request<{ message: string; cookies_stored: number }>('/auth/gupy/connect', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  storeGupySession: (token: string) =>
+    request<{ message: string; cookies_stored: number }>('/auth/gupy/session', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  removeGupySession: () =>
+    request<{ message: string }>('/auth/gupy/session', { method: 'DELETE' }),
 
   uploadCV: (file: File, timeoutMs = 60_000) => {
     const form = new FormData()
@@ -113,8 +178,14 @@ export type UserProfile = {
   location_type: string | null
   cv_filename: string | null
   cv_parsed: Record<string, unknown> | null
+  has_linkedin_session: boolean
+  has_gupy_session: boolean
   created_at: string
 }
+
+export type LinkedInConnectResult =
+  | { status: 'success'; message: string; cookies_stored: number }
+  | { status: '2fa_required'; challenge_id: string }
 
 export type Job = {
   id: string
@@ -176,7 +247,7 @@ export const jobs = {
     }),
 
   applyAuto: (jobIds: string[]) =>
-    request<{ message: string; job_id: string }>('/automation/apply/auto', {
+    request<{ message: string; job_id: string; targets: { job_id: string; title: string; platform: string }[] }>('/automation/apply/auto', {
       method: 'POST',
       body: JSON.stringify({ job_ids: jobIds }),
     }),

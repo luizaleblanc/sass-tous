@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Trash2, Upload, Plus, X, ChevronRight, LogOut, Loader2, CheckCircle2, Mail, Send, Zap, Key, Eye, EyeOff } from 'lucide-react'
+import { ExternalLink, Trash2, Upload, Plus, X, ChevronRight, LogOut, Loader2, CheckCircle2, Mail, Send, Zap, Key, Eye, EyeOff, Linkedin, AlertCircle } from 'lucide-react'
 import { auth, jobs, UserProfile, Job } from '@/lib/api'
 
 // ─── CV Upload Button ───────────────────────────────────────────────────────
@@ -100,6 +100,223 @@ function CVUploadButton({
   )
 }
 
+// ─── LinkedIn Connect Modal ──────────────────────────────────────────────────
+
+function LinkedInConnectModal({
+  onClose,
+  onConnected,
+}: {
+  onClose: () => void
+  onConnected: () => void
+}) {
+  const [liAt, setLiAt] = useState('')
+  const [liAtVisible, setLiAtVisible] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleManualSave() {
+    if (!liAt.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      await auth.linkedinSession(liAt.trim())
+      onConnected()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar sessão.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl p-8 flex flex-col gap-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0077b5]">
+                <Linkedin size={16} className="text-white" />
+              </div>
+              <h2 className="font-display-condensed text-[#1a2e8a] text-2xl leading-none">
+                CONECTAR LINKEDIN
+              </h2>
+            </div>
+            <p className="text-xs text-[#1a2e8a]/50">
+              Acesse vagas exclusivas e candidate-se automaticamente via Easy Apply.
+            </p>
+          </div>
+          <button onClick={onClose} className="shrink-0 text-[#1a2e8a]/30 hover:text-[#1a2e8a]">
+            <X size={20} />
+          </button>
+        </div>
+
+        {!showManual && challengeId ? (
+          /* ── 2FA challenge ── */
+          <>
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+              <p className="text-xs font-semibold text-yellow-700">
+                LinkedIn pediu verificação de segurança. Verifique seu email ou SMS e insira o código abaixo.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Código de verificação</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={twoFACode}
+                  onChange={(e) => setTwoFACode(e.target.value)}
+                  placeholder="123456"
+                  maxLength={8}
+                  className="flex-1 rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 text-sm text-[#1a2e8a] outline-none focus:border-[#1a2e8a] font-mono tracking-widest"
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerify2FA()}
+                />
+                <button
+                  onClick={handleVerify2FA}
+                  disabled={loading || !twoFACode.trim()}
+                  className="shrink-0 rounded-xl bg-[#1a2e8a] px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-80 disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
+                  Verificar
+                </button>
+              </div>
+            </div>
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+            <button
+              onClick={() => { setChallengeId(null); setTwoFACode(''); setError('') }}
+              className="text-center text-xs text-[#1a2e8a]/40 underline underline-offset-2 hover:text-[#1a2e8a]"
+            >
+              Cancelar e tentar novamente
+            </button>
+          </>
+        ) : !showManual ? (
+          <>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Email LinkedIn</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 text-sm text-[#1a2e8a] outline-none focus:border-[#1a2e8a]"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">Senha LinkedIn</label>
+                <div className="relative">
+                  <input
+                    type={passwordVisible ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAutoConnect()}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 pr-10 text-sm text-[#1a2e8a] outline-none focus:border-[#1a2e8a]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPasswordVisible((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1a2e8a]/30 hover:text-[#1a2e8a]"
+                  >
+                    {passwordVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#1a2e8a]/40 bg-[#1a2e8a]/5 rounded-xl px-4 py-3">
+              Suas credenciais são usadas apenas uma vez para capturar sua sessão — não ficam armazenadas.
+            </p>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleAutoConnect}
+              disabled={loading || !email.trim() || !password.trim()}
+              className="flex items-center justify-center gap-2 rounded-full bg-[#0077b5] py-3.5 text-sm font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <Linkedin size={15} />}
+              {loading ? 'Conectando... (pode levar até 40s)' : 'Conectar automaticamente'}
+            </button>
+
+            <button
+              onClick={() => setShowManual(true)}
+              className="text-center text-xs text-[#1a2e8a]/40 underline underline-offset-2 hover:text-[#1a2e8a]"
+            >
+              Prefiro colar o cookie manualmente
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-[#1a2e8a]/60">
+              Abra o LinkedIn no navegador, faça login, então abra o DevTools (F12) → aba <strong>Application</strong> → <strong>Cookies</strong> → <code className="font-mono bg-[#1a2e8a]/5 px-1 rounded">www.linkedin.com</code> → copie o valor de <code className="font-mono bg-[#1a2e8a]/5 px-1 rounded">li_at</code>.
+            </p>
+
+            <div className="relative">
+              <input
+                type={liAtVisible ? 'text' : 'password'}
+                value={liAt}
+                onChange={(e) => setLiAt(e.target.value)}
+                placeholder="AQEDATi..."
+                className="w-full rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 pr-10 text-sm text-[#1a2e8a] font-mono outline-none focus:border-[#1a2e8a]"
+              />
+              <button
+                type="button"
+                onClick={() => setLiAtVisible((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1a2e8a]/30 hover:text-[#1a2e8a]"
+              >
+                {liAtVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={handleManualSave}
+              disabled={loading || !liAt.trim()}
+              className="flex items-center justify-center gap-2 rounded-full bg-[#1a2e8a] py-3.5 text-sm font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <Key size={15} />}
+              {loading ? 'Salvando...' : 'Salvar sessão'}
+            </button>
+
+            <button
+              onClick={() => { setShowManual(false); setError('') }}
+              className="text-center text-xs text-[#1a2e8a]/40 underline underline-offset-2 hover:text-[#1a2e8a]"
+            >
+              Voltar para login automático
+            </button>
+          </>
+        )}
+
+        <button
+          onClick={onClose}
+          className="text-center text-xs text-[#1a2e8a]/30 hover:text-[#1a2e8a]"
+        >
+          Pular por enquanto
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const AREAS = [
@@ -185,20 +402,14 @@ function NavButtons({ active, onChange }: { active: string; onChange: (tab: stri
   )
 }
 
-type AutoApplyState = 'idle' | 'loading' | 'done' | 'error'
-
 function JobCard({
   job,
   onDelete,
   onApplyEmail,
-  onApplyAuto,
-  autoApplyState = 'idle',
 }: {
   job: Job
   onDelete?: (id: string) => void
   onApplyEmail?: () => void
-  onApplyAuto?: () => void
-  autoApplyState?: AutoApplyState
 }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-2xl bg-white border border-[#1a2e8a]/10 px-5 py-4 shadow-sm">
@@ -249,28 +460,6 @@ function JobCard({
           >
             <ExternalLink size={14} />
           </a>
-        )}
-        {onApplyAuto && AUTO_APPLY_PLATFORMS.has(job.platform ?? '') && (
-          <button
-            onClick={onApplyAuto}
-            disabled={autoApplyState === 'loading' || autoApplyState === 'done'}
-            title={autoApplyState === 'done' ? 'Candidatura enviada' : 'Auto-candidatar'}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-              autoApplyState === 'done'
-                ? 'bg-green-100 text-green-500 cursor-default'
-                : autoApplyState === 'error'
-                ? 'bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600'
-                : 'bg-[#1a2e8a]/10 text-[#1a2e8a] hover:bg-[#1a2e8a] hover:text-white'
-            }`}
-          >
-            {autoApplyState === 'loading' ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : autoApplyState === 'done' ? (
-              <CheckCircle2 size={14} />
-            ) : (
-              <Zap size={14} />
-            )}
-          </button>
         )}
         {onDelete && (
           <button
@@ -558,7 +747,8 @@ function VagasTab({ profile }: { profile: UserProfile }) {
   const [polling, setPolling] = useState(false)
   const [pollAttempt, setPollAttempt] = useState(0)
   const [emailJob, setEmailJob] = useState<Job | null>(null)
-  const [autoApplyStates, setAutoApplyStates] = useState<Record<string, AutoApplyState>>({})
+  const [autoApplyRunning, setAutoApplyRunning] = useState(false)
+  const [autoApplyResult, setAutoApplyResult] = useState<{ queued: number } | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function load(silent = false) {
@@ -567,8 +757,10 @@ function VagasTab({ profile }: { profile: UserProfile }) {
       const data = await jobs.matches()
       setList(data)
       return data.length
-    } catch {
-      setList([])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('401')) return -1
+      if (!silent) setList([])
       return 0
     } finally {
       if (!silent) setLoading(false)
@@ -585,6 +777,7 @@ function VagasTab({ profile }: { profile: UserProfile }) {
     pollRef.current = setTimeout(async () => {
       setPollAttempt(attempt + 1)
       const count = await load(true)
+      if (count < 0) { stopPolling(); return }
       if (count > 0) { stopPolling(); return }
       scheduleNextPoll(attempt + 1)
     }, POLL_INTERVAL_MS)
@@ -609,6 +802,7 @@ function VagasTab({ profile }: { profile: UserProfile }) {
       setPollAttempt(0)
       scheduleNextPoll(0)
     }
+    // count < 0 means auth error — redirect already triggered by api.ts
   }
 
   async function handleDelete(id: string) {
@@ -616,14 +810,20 @@ function VagasTab({ profile }: { profile: UserProfile }) {
     setList((prev) => prev.filter((j) => j.id !== id))
   }
 
-  async function handleAutoApply(jobId: string) {
-    setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'loading' }))
+  async function handleBatchAutoApply() {
+    const eligible = list.filter(
+      (j) => AUTO_APPLY_PLATFORMS.has(j.platform ?? '') && j.status !== 'Aplicada'
+    )
+    if (!eligible.length) return
+    setAutoApplyRunning(true)
+    setAutoApplyResult(null)
     try {
-      await jobs.applyAuto([jobId])
-      setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'done' }))
-      setList((prev) => prev.map((j) => j.id === jobId ? { ...j, status: 'Aplicada' } : j))
+      const res = await jobs.applyAuto(eligible.map((j) => j.id))
+      setAutoApplyResult({ queued: res.targets?.length ?? eligible.length })
     } catch {
-      setAutoApplyStates((prev) => ({ ...prev, [jobId]: 'error' }))
+      setAutoApplyResult({ queued: 0 })
+    } finally {
+      setAutoApplyRunning(false)
     }
   }
 
@@ -657,6 +857,41 @@ function VagasTab({ profile }: { profile: UserProfile }) {
           </button>
         </div>
 
+        {(() => {
+          const eligible = list.filter((j) => AUTO_APPLY_PLATFORMS.has(j.platform ?? '') && j.status !== 'Aplicada')
+          if (eligible.length === 0) return null
+          return (
+            <div className="rounded-2xl border border-[#1a2e8a]/10 bg-white px-5 py-4 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[#1a2e8a]">
+                  {eligible.length} vaga{eligible.length !== 1 ? 's' : ''} elegíveis para auto-candidatura
+                </p>
+                <p className="text-xs text-[#1a2e8a]/50 mt-0.5">
+                  LinkedIn · Gupy · RemoteOK · InfoJobs
+                </p>
+                {autoApplyResult && (
+                  <p className={`text-xs font-semibold mt-1 ${autoApplyResult.queued > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {autoApplyResult.queued > 0
+                      ? `${autoApplyResult.queued} candidatura${autoApplyResult.queued !== 1 ? 's' : ''} enfileirada${autoApplyResult.queued !== 1 ? 's' : ''} — acompanhe em Candidaturas`
+                      : 'Não foi possível enfileirar as candidaturas. Tente novamente.'}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handleBatchAutoApply}
+                disabled={autoApplyRunning}
+                className="flex shrink-0 items-center gap-2 rounded-full bg-[#1a2e8a] px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+              >
+                {autoApplyRunning ? (
+                  <><Loader2 size={13} className="animate-spin" /> Candidatando...</>
+                ) : (
+                  <><Zap size={13} /> Auto-candidatar</>
+                )}
+              </button>
+            </div>
+          )
+        })()}
+
         {polling && list.length === 0 && (
           <div className="flex items-center gap-3 rounded-2xl border border-[#1a2e8a]/10 bg-[#1a2e8a]/5 px-5 py-4">
             <Loader2 size={18} className="shrink-0 animate-spin text-[#1a2e8a]/50" />
@@ -679,8 +914,6 @@ function VagasTab({ profile }: { profile: UserProfile }) {
             job={j}
             onDelete={handleDelete}
             onApplyEmail={j.application_type === 'email' ? () => setEmailJob(j) : undefined}
-            onApplyAuto={() => handleAutoApply(j.id)}
-            autoApplyState={autoApplyStates[j.id] ?? 'idle'}
           />
         ))}
       </div>
@@ -898,10 +1131,7 @@ function PerfilTab({ profile, onUpdate }: { profile: UserProfile; onUpdate: (p: 
   const [locationType, setLocationType] = useState(profile.location_type ?? '')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [liAt, setLiAt] = useState('')
-  const [liAtVisible, setLiAtVisible] = useState(false)
-  const [liSaving, setLiSaving] = useState(false)
-  const [liMsg, setLiMsg] = useState('')
+  const [showLinkedIn, setShowLinkedIn] = useState(false)
 
   function toggleStack(s: string) {
     setSelectedStacks((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -940,89 +1170,52 @@ function PerfilTab({ profile, onUpdate }: { profile: UserProfile; onUpdate: (p: 
     setMsg('CV processado! Suas tecnologias foram atualizadas.')
   }
 
-  async function handleSaveLiAt() {
-    setLiSaving(true)
-    setLiMsg('')
-    try {
-      await auth.linkedinSession(liAt.trim())
-      setLiMsg('Sessão LinkedIn salva com sucesso!')
-      setLiAt('')
-    } catch (err) {
-      setLiMsg(err instanceof Error ? err.message : 'Erro ao salvar sessão.')
-    } finally {
-      setLiSaving(false)
-    }
-  }
-
-  async function handleRemoveLiAt() {
-    setLiSaving(true)
-    setLiMsg('')
-    try {
-      await auth.removeLinkedinSession()
-      setLiMsg('Sessão LinkedIn removida.')
-    } catch (err) {
-      setLiMsg(err instanceof Error ? err.message : 'Erro ao remover sessão.')
-    } finally {
-      setLiSaving(false)
-    }
-  }
-
   return (
     <div className="flex flex-col gap-6">
+      {showLinkedIn && (
+        <LinkedInConnectModal
+          onClose={() => setShowLinkedIn(false)}
+          onConnected={() => {
+            setShowLinkedIn(false)
+            auth.me().then(onUpdate).catch(() => null)
+          }}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">CV</label>
         <CVUploadButton onUpload={handleCVUpload} currentFilename={profile.cv_filename} />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-bold uppercase tracking-widest text-[#1a2e8a]/60">
-          Sessão LinkedIn{' '}
-          <span className="normal-case font-normal text-[#1a2e8a]/30">(para auto-candidatura)</span>
-        </label>
-        <p className="text-xs text-[#1a2e8a]/40">
-          Cole seu cookie <code className="font-mono bg-[#1a2e8a]/5 px-1 rounded">li_at</code> para habilitar auto-candidatura no LinkedIn. Obtenha-o nas DevTools do navegador após fazer login.
-        </p>
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              type={liAtVisible ? 'text' : 'password'}
-              value={liAt}
-              onChange={(e) => setLiAt(e.target.value)}
-              placeholder="AQEDATi..."
-              className="w-full rounded-xl border border-[#1a2e8a]/20 bg-white px-4 py-2.5 pr-10 text-sm text-[#1a2e8a] font-mono outline-none focus:border-[#1a2e8a]"
-            />
-            <button
-              type="button"
-              onClick={() => setLiAtVisible((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1a2e8a]/30 hover:text-[#1a2e8a]"
-            >
-              {liAtVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
+      <div className="flex items-center justify-between rounded-2xl border border-[#1a2e8a]/10 bg-white px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-9 w-9 items-center justify-center rounded-full ${profile.has_linkedin_session ? 'bg-[#0077b5]' : 'bg-[#1a2e8a]/10'}`}>
+            <Linkedin size={16} className={profile.has_linkedin_session ? 'text-white' : 'text-[#1a2e8a]/40'} />
           </div>
-          <button
-            onClick={handleSaveLiAt}
-            disabled={liSaving || !liAt.trim()}
-            className="flex items-center gap-1.5 rounded-xl bg-[#1a2e8a] px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-          >
-            {liSaving ? <Loader2 size={13} className="animate-spin" /> : <Key size={13} />}
-            Salvar
-          </button>
+          <div>
+            <p className="text-sm font-bold text-[#1a2e8a]">LinkedIn</p>
+            <p className="text-xs text-[#1a2e8a]/50">
+              {profile.has_linkedin_session ? 'Sessão ativa — auto-candidatura habilitada' : 'Não conectado'}
+            </p>
+          </div>
         </div>
-        <button
-          onClick={handleRemoveLiAt}
-          disabled={liSaving}
-          className="self-start text-xs font-semibold text-red-400 transition-colors hover:text-red-600 disabled:opacity-40"
-        >
-          Remover sessão
-        </button>
-        {liMsg && (
-          <p className={`rounded-xl border px-4 py-3 text-sm ${
-            liMsg.includes('sucesso') || liMsg.includes('removida')
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-600'
-          }`}>
-            {liMsg}
-          </p>
+        {profile.has_linkedin_session ? (
+          <button
+            onClick={async () => {
+              await auth.removeLinkedinSession().catch(() => null)
+              auth.me().then(onUpdate).catch(() => null)
+            }}
+            className="text-xs font-semibold text-red-400 transition-colors hover:text-red-600"
+          >
+            Desconectar
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowLinkedIn(true)}
+            className="flex items-center gap-1.5 rounded-full bg-[#0077b5] px-4 py-2 text-xs font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-80"
+          >
+            <Linkedin size={12} /> Conectar
+          </button>
         )}
       </div>
 
@@ -1401,6 +1594,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [tab, setTab] = useState('automacao')
   const [ready, setReady] = useState(false)
+  const [showLinkedInModal, setShowLinkedInModal] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -1438,6 +1632,16 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-[#e8e8e8]">
+      {showLinkedInModal && (
+        <LinkedInConnectModal
+          onClose={() => setShowLinkedInModal(false)}
+          onConnected={() => {
+            setShowLinkedInModal(false)
+            auth.me().then(setProfile).catch(() => null)
+          }}
+        />
+      )}
+
       <aside className="flex w-64 shrink-0 flex-col bg-[#1a2e8a] px-5 py-8">
         <div className="mb-8">
           <span className="font-display-condensed text-white/60 text-xs uppercase tracking-widest">Bem-vindo,</span>
@@ -1446,7 +1650,21 @@ export default function DashboardPage() {
 
         <NavButtons active={tab} onChange={setTab} />
 
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-3">
+          {!profile.has_linkedin_session && (
+            <button
+              onClick={() => setShowLinkedInModal(true)}
+              className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
+            >
+              <Linkedin size={13} /> Conectar LinkedIn
+            </button>
+          )}
+          {profile.has_linkedin_session && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-white/40">
+              <Linkedin size={13} className="text-[#0077b5]" />
+              <span>LinkedIn conectado</span>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 text-white/50 text-xs font-semibold uppercase tracking-widest transition-colors hover:text-white"
